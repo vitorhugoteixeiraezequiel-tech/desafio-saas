@@ -47,3 +47,4 @@ next-env.d.ts
 
 # configuração local do editor/agente
 /.claude/
+/data-demo/

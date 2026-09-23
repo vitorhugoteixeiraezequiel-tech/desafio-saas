@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const PROTECTED = ["/dashboard", "/negocio", "/perfil"];
+const PROTECTED = ["/dashboard", "/negocio", "/perfil", "/admin"];
 const AUTH_PAGES = ["/login", "/cadastro"];
 
 // Checagem otimista: só valida o cookie, sem consultar o banco.

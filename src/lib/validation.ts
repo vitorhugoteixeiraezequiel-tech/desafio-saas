@@ -27,6 +27,18 @@ export const passwordSchema = z.object({
   newPassword: password,
 });
 
+const role = z.enum(["admin", "user"], { error: "Escolha o tipo de acesso" });
+
+export const adminCreateUserSchema = z.object({ name, email, password, role });
+
+export const adminUpdateUserSchema = z.object({
+  name,
+  email,
+  role,
+  // Em branco = mantém a senha atual.
+  password: z.union([z.literal(""), password]),
+});
+
 export const businessSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome da empresa").max(100),
   segment: z.string().trim().min(2, "Informe o ramo de atuação").max(100),

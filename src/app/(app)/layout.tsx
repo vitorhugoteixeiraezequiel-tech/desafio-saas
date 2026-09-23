@@ -20,6 +20,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <Link href="/negocio" className="rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
               Meu negócio
             </Link>
+            {user.role === "admin" && (
+              <Link href="/admin" className="rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
+                Admin
+              </Link>
+            )}
             <Link href="/perfil" className="rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-100">
               {user.name.split(" ")[0]}
             </Link>

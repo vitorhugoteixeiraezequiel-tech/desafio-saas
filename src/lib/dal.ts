@@ -16,8 +16,15 @@ export const requireUser = cache(async () => {
   return user;
 });
 
+/** Igual a requireUser, mas só deixa passar administradores. */
+export async function requireAdmin() {
+  const user = await requireUser();
+  if (user.role !== "admin") redirect("/dashboard");
+  return user;
+}
+
 /** Versão sem o hash de senha, segura para passar a componentes. */
 export async function getCurrentUser() {
-  const { id, name, email, created_at } = await requireUser();
-  return { id, name, email, created_at };
+  const { id, name, email, role, created_at } = await requireUser();
+  return { id, name, email, role, created_at };
 }

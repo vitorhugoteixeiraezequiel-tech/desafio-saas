@@ -4,17 +4,44 @@ SaaS que ajuda pequenas empresas a **responder clientes no WhatsApp, e-mail e In
 
 A empresa cadastra uma única vez as informações do negócio (horários, preços, entrega, pagamento, políticas). Depois, é só colar a mensagem de um cliente: a IA **entende o que ele quer**, classifica a mensagem e escreve a **resposta pronta**, no tom da marca e **usando apenas as informações cadastradas**. Se o cliente perguntar algo que não está no cadastro, a IA não inventa: avisa que vai verificar com a equipe e mostra ao usuário o que está faltando.
 
+> 📄 Quer entender o projeto em linguagem simples? Leia a [**explicação do projeto**](EXPLICACAO.md).
+
+## Telas
+
+**Atendimento com IA.** A mensagem é classificada (intenção, sentimento, urgência) e a resposta é sugerida. No exemplo abaixo, o cliente perguntou sobre "pizza meio a meio", que não está no cadastro, e a IA avisou em vez de inventar.
+
+![Atendimento](docs/screenshots/02-atendimento.png)
+
+<table>
+  <tr>
+    <td width="50%"><b>Página inicial</b><br><img src="docs/screenshots/01-inicio.png" alt="Página inicial"></td>
+    <td width="50%"><b>Meu negócio</b> (o que a IA sabe sobre a empresa)<br><img src="docs/screenshots/03-meu-negocio.png" alt="Meu negócio"></td>
+  </tr>
+  <tr>
+    <td width="50%"><b>Painel admin</b> (lista e cria usuários)<br><img src="docs/screenshots/04-admin.png" alt="Painel admin"></td>
+    <td width="50%"><b>Admin: editar ou excluir usuário</b><br><img src="docs/screenshots/05-admin-editar.png" alt="Editar usuário"></td>
+  </tr>
+</table>
+
 ## O problema que resolve
 
 Pequenos negócios (pizzarias, clínicas, lojas) recebem dezenas de mensagens repetidas por dia e perdem tempo, ou vendas, respondendo tudo manualmente. Chatbots genéricos inventam informações. O Respondi gera respostas **ancoradas nos dados reais da empresa** e mantém o humano no controle: ele revisa e envia.
 
 ## Funcionalidades
 
-**Usuário (CRUD completo)**
+**CRUD de usuário, pelo próprio usuário**
 - **Create**: cadastro com nome, e-mail e senha (senha salva com hash bcrypt)
 - **Read**: login e página de perfil com os dados da conta
 - **Update**: edição de nome/e-mail e troca de senha (exige a senha atual)
 - **Delete**: exclusão da conta (exige confirmação de senha e apaga todos os dados do usuário junto)
+
+**CRUD de usuário, pelo administrador** (`/admin`)
+- **Create**: criar usuários definindo nome, e-mail, senha e tipo de acesso (usuário ou administrador)
+- **Read**: lista de todos os usuários, com o negócio de cada um, a quantidade de atendimentos e a data de cadastro
+- **Update**: editar nome, e-mail, tipo de acesso e redefinir a senha
+- **Delete**: excluir usuário (com confirmação), apagando o negócio e o histórico dele
+- Regras de proteção: o **primeiro usuário cadastrado vira administrador**, um admin não pode remover o próprio acesso e o sistema nunca fica sem nenhum administrador
+- Usuários comuns não veem o link do painel e são redirecionados se tentarem acessar `/admin`
 
 **Meu negócio (base de conhecimento)**
 - Nome, ramo, tom de voz da marca (formal, amigável ou descontraído) e um texto livre com todas as informações da empresa
@@ -83,11 +110,27 @@ npm run dev
 ```
 
 Acesse **http://localhost:3000** e siga o fluxo:
-1. Crie uma conta
+1. Crie uma conta. A primeira conta criada é a de **administrador**.
 2. Em **Meu negócio**, clique em **Preencher com exemplo** e salve
 3. Em **Atendimento**, clique numa mensagem de exemplo e em **Gerar resposta**
+4. Em **Admin**, veja e gerencie todos os usuários
 
 O banco SQLite é criado automaticamente em `data/app.db` no primeiro acesso.
+
+### Contas de demonstração (opcional)
+
+Para não precisar cadastrar nada, rode antes de iniciar:
+
+```bash
+npm run seed              # cria 3 contas e 2 negócios de exemplo
+npm run seed -- --com-ia  # também gera 4 atendimentos reais com o Gemini
+```
+
+| E-mail | Senha | Acesso |
+|---|---|---|
+| admin@respondi.dev | demo1234 | Administrador (Pizzaria Forno de Pedra) |
+| carla@respondi.dev | demo1234 | Usuário (Clínica Sorriso Pleno) |
+| rafael@respondi.dev | demo1234 | Usuário (sem negócio cadastrado) |
 
 **Testar a IA pelo terminal**, sem abrir o site:
 
@@ -105,9 +148,11 @@ src/
 │   ├── (app)/dashboard          # Atendimento com IA + histórico (protegido)
 │   ├── (app)/negocio            # Base de conhecimento do negócio (protegido)
 │   ├── (app)/perfil             # Editar dados, trocar senha, excluir conta (protegido)
+│   ├── (app)/admin              # Lista, cria, edita e exclui usuários (só administradores)
 │   └── actions/                 # Server Actions
 │       ├── auth.ts              #   cadastro, login, logout
 │       ├── user.ts              #   atualizar perfil, trocar senha, excluir conta
+│       ├── admin.ts             #   CRUD de usuários pelo administrador
 │       ├── business.ts          #   salvar informações do negócio
 │       └── reply.ts             #   analisar mensagem com IA, excluir do histórico
 ├── components/                  # Formulários e componentes de interface
@@ -120,6 +165,7 @@ src/
 │   └── labels.ts                # Rótulos da interface e dados de exemplo
 └── proxy.ts                     # Redireciona visitantes não logados (antigo middleware)
 scripts/
+├── seed.mts                     # Cria contas e dados de demonstração
 └── testar-ia.mts                # Testa a IA com o negócio e as mensagens de exemplo
 ```
 
@@ -127,7 +173,7 @@ scripts/
 
 - Senhas nunca são salvas em texto puro (bcrypt).
 - Sessão em cookie `httpOnly` e `sameSite=lax`, inacessível via JavaScript.
-- O `proxy.ts` faz apenas uma checagem rápida. **Toda página protegida e toda Server Action** revalidam o usuário no banco (`requireUser`).
+- O `proxy.ts` faz apenas uma checagem rápida. **Toda página protegida e toda Server Action** revalidam o usuário no banco (`requireUser`), e as do painel admin também verificam o tipo de acesso (`requireAdmin`).
 - Cada usuário só acessa os próprios dados (filtro por `user_id` em todas as consultas).
 - As chaves ficam no `.env`, que está no `.gitignore`.
 

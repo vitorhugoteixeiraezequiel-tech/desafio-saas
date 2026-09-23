@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "testar-ia": "node --conditions=react-server --env-file=.env scripts/testar-ia.mts"
+    "seed": "node --conditions=react-server --env-file=.env scripts/seed.mts",
+    "testar-ia":"node --conditions=react-server --env-file=.env scripts/testar-ia.mts"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
