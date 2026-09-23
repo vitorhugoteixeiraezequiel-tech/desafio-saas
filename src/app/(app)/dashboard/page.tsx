@@ -10,7 +10,7 @@ export const metadata = { title: "Atendimento — Respondi" };
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const business = getBusiness(user.id);
+  const business = await getBusiness(user.id);
 
   if (!business) {
     return (
@@ -30,7 +30,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const replies = listReplies(user.id);
+  const replies = await listReplies(user.id);
 
   return (
     <div className="space-y-10">

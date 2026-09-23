@@ -74,7 +74,7 @@ Pequenos negócios (pizzarias, clínicas, lojas) recebem dezenas de mensagens re
 | Framework | **Next.js 16** (App Router, Server Actions) | Front e back no mesmo projeto, sem API separada |
 | Linguagem | **TypeScript** | Tipagem de ponta a ponta |
 | Estilo | **Tailwind CSS 4** | Interface rápida de construir e responsiva |
-| Banco | **SQLite** via `node:sqlite` (nativo do Node) | Zero configuração e nenhuma dependência nativa para compilar |
+| Banco | **SQLite / Turso** via `@libsql/client` | Localmente é um arquivo, sem instalar nada. Em produção, o mesmo código usa o Turso (SQLite na nuvem). |
 | IA | **Google Gemini** via `@google/genai` | API gratuita, com suporte a saída JSON estruturada |
 | Autenticação | JWT em cookie `httpOnly` (`jose`) + `bcryptjs` | Sessão sem estado, segue o guia oficial do Next.js |
 | Validação | **Zod** | Valida formulários e a resposta da IA |
@@ -115,15 +115,14 @@ Acesse **http://localhost:3000** e siga o fluxo:
 3. Em **Atendimento**, clique numa mensagem de exemplo e em **Gerar resposta**
 4. Em **Admin**, veja e gerencie todos os usuários
 
-O banco SQLite é criado automaticamente em `data/app.db` no primeiro acesso.
+Localmente, o banco SQLite é criado automaticamente em `data/app.db` no primeiro acesso. Se `TURSO_DATABASE_URL` estiver definida, o sistema usa o banco na nuvem.
 
 ### Contas de demonstração (opcional)
 
 Para não precisar cadastrar nada, rode antes de iniciar:
 
 ```bash
-npm run seed              # cria 3 contas e 2 negócios de exemplo
-npm run seed -- --com-ia  # também gera 4 atendimentos reais com o Gemini
+npm run seed   # cria 3 contas, 2 negócios e 4 atendimentos de exemplo
 ```
 
 | E-mail | Senha | Acesso |
@@ -157,7 +156,8 @@ src/
 │       └── reply.ts             #   analisar mensagem com IA, excluir do histórico
 ├── components/                  # Formulários e componentes de interface
 ├── lib/
-│   ├── db.ts                    # Conexão SQLite, criação das tabelas e consultas
+│   ├── db.ts                    # Conexão (SQLite local ou Turso), tabelas e consultas
+│   ├── demo-data.ts             # Contas e atendimentos de demonstração
 │   ├── gemini.ts                # Prompt, schema da resposta e chamada ao Gemini
 │   ├── session.ts               # Criação e validação do cookie de sessão (JWT)
 │   ├── dal.ts                   # Verificação de usuário autenticado

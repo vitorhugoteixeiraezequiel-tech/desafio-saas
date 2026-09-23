@@ -16,12 +16,12 @@ export async function signup(_: FormState, formData: FormData): Promise<FormStat
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
   const { name, email, password } = parsed.data;
-  if (findUserByEmail(email)) {
+  if (await findUserByEmail(email)) {
     return { fieldErrors: { email: ["Este e-mail já está cadastrado"] } };
   }
 
   const hash = await bcrypt.hash(password, 10);
-  const userId = createUser(name, email, hash);
+  const userId = await createUser(name, email, hash);
   await createSession(userId);
   redirect("/dashboard");
 }
@@ -30,7 +30,7 @@ export async function login(_: FormState, formData: FormData): Promise<FormState
   const parsed = loginSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  const user = findUserByEmail(parsed.data.email);
+  const user = await findUserByEmail(parsed.data.email);
   const ok = user && (await bcrypt.compare(parsed.data.password, user.password_hash));
   if (!ok) return { error: "E-mail ou senha incorretos" };
 

@@ -1,7 +1,11 @@
 import "server-only";
-import { DatabaseSync } from "node:sqlite";
+import { createClient, type Client, type InStatement, type ResultSet } from "@libsql/client";
+import bcrypt from "bcryptjs";
+import { DEMO_ACCOUNTS, DEMO_PASSWORD, DEMO_REPLIES } from "./demo-data.ts";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
+
+export type Role = "admin" | "user";
 
 export type User = {
   id: number;
@@ -11,8 +15,6 @@ export type User = {
   role: Role;
   created_at: string;
 };
-
-export type Role = "admin" | "user";
 
 /** Usuário com estatísticas, para a listagem do painel admin. */
 export type UserWithStats = Omit<User, "password_hash"> & {
@@ -45,163 +47,249 @@ export type Reply = {
   created_at: string;
 };
 
-// Reaproveita a conexão entre recarregamentos do servidor em desenvolvimento.
-const globalForDb = globalThis as unknown as { db?: DatabaseSync };
+// ---------- Conexão ----------
+//
+// Em produção (Vercel) usa o Turso, um SQLite na nuvem, via TURSO_DATABASE_URL.
+// Localmente, sem essa variável, usa um arquivo SQLite em ./data (zero configuração).
 
-// Conexão aberta só no primeiro uso (evita abrir o banco durante o build).
-function getDb() {
-  if (globalForDb.db) return globalForDb.db;
+function createDb() {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (url) return createClient({ url, authToken: process.env.TURSO_AUTH_TOKEN });
 
-  // DATA_DIR permite usar outro banco (ex.: o de demonstração dos prints).
+  // DATA_DIR permite usar outro banco local (ex.: o de demonstração dos prints).
   const dataDir = path.resolve(/*turbopackIgnore: true*/ process.env.DATA_DIR || "data");
   mkdirSync(dataDir, { recursive: true });
-  const db = new DatabaseSync(path.join(dataDir, "app.db"), { timeout: 5000 });
-  migrate(db);
-  globalForDb.db = db;
-  return db;
+  return createClient({ url: "file:" + path.join(dataDir, "app.db").replaceAll("\\", "/") });
 }
 
-function migrate(db: DatabaseSync) {
-  db.exec(`
-  PRAGMA journal_mode = WAL;
-  PRAGMA foreign_keys = ON;
+// Reaproveita a conexão (e a migração) entre recarregamentos em desenvolvimento.
+const globalForDb = globalThis as unknown as { db?: Client; ready?: Promise<void> };
 
-  CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    name          TEXT    NOT NULL,
-    email         TEXT    NOT NULL UNIQUE,
-    password_hash TEXT    NOT NULL,
-    role          TEXT    NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
-    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
-  );
+async function getDb() {
+  globalForDb.db ??= createDb();
+  const db = globalForDb.db;
+  globalForDb.ready ??= (async () => {
+    await migrate(db);
+    // No site de demonstração, cria as contas de exemplo se o banco estiver vazio.
+    if (process.env.DEMO_SEED === "1") await seedDemo(db);
+  })().catch((err) => {
+    globalForDb.ready = undefined; // tenta de novo na próxima chamada
+    throw err;
+  });
+  await globalForDb.ready;
+  return globalForDb.db;
+}
 
-  CREATE TABLE IF NOT EXISTS businesses (
-    user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    name       TEXT    NOT NULL,
-    segment    TEXT    NOT NULL,
-    tone       TEXT    NOT NULL,
-    info       TEXT    NOT NULL,
-    updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
-  );
+async function migrate(db: Client) {
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT    NOT NULL,
+      email         TEXT    NOT NULL UNIQUE,
+      password_hash TEXT    NOT NULL,
+      role          TEXT    NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
 
-  CREATE TABLE IF NOT EXISTS replies (
-    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    channel          TEXT    NOT NULL,
-    customer_message TEXT    NOT NULL,
-    intent           TEXT    NOT NULL,
-    sentiment        TEXT    NOT NULL,
-    urgency          TEXT    NOT NULL,
-    summary          TEXT    NOT NULL,
-    reply            TEXT    NOT NULL,
-    missing_info     TEXT    NOT NULL DEFAULT '[]',
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
-  );
+    CREATE TABLE IF NOT EXISTS businesses (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT    NOT NULL,
+      segment    TEXT    NOT NULL,
+      tone       TEXT    NOT NULL,
+      info       TEXT    NOT NULL,
+      updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
 
-  -- Tabela da versão anterior (gerador de descrições), não usada mais.
-  DROP TABLE IF EXISTS generations;
-`);
+    CREATE TABLE IF NOT EXISTS replies (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      channel          TEXT    NOT NULL,
+      customer_message TEXT    NOT NULL,
+      intent           TEXT    NOT NULL,
+      sentiment        TEXT    NOT NULL,
+      urgency          TEXT    NOT NULL,
+      summary          TEXT    NOT NULL,
+      reply            TEXT    NOT NULL,
+      missing_info     TEXT    NOT NULL DEFAULT '[]',
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS replies_user_id ON replies(user_id);
+
+    -- Tabela da versão anterior (gerador de descrições), não usada mais.
+    DROP TABLE IF EXISTS generations;
+  `);
 
   // Bancos criados antes do painel admin não têm a coluna "role".
-  const columns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
-  if (!columns.some((c) => c.name === "role")) {
-    db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+  const columns = await db.execute("PRAGMA table_info(users)");
+  if (!columns.rows.some((c) => c.name === "role")) {
+    await db.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
   }
 
   // Garante que exista pelo menos um admin: o usuário mais antigo.
-  db.exec(`
+  await db.execute(`
     UPDATE users SET role = 'admin'
     WHERE id = (SELECT MIN(id) FROM users)
-      AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin');
+      AND NOT EXISTS (SELECT 1 FROM users WHERE role = 'admin')
   `);
+}
+
+/** Cria as contas e dados de demonstração que ainda não existirem. */
+export async function seedDemo(db?: Client) {
+  const client = db ?? (await getDb());
+  const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
+
+  for (const acc of DEMO_ACCOUNTS) {
+    const found = await client.execute({ sql: "SELECT id FROM users WHERE email = ?", args: [acc.email] });
+    if (found.rows.length > 0) continue;
+
+    const res = await client.execute({
+      sql: "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+      args: [acc.name, acc.email, hash, acc.role],
+    });
+    const userId = Number(res.lastInsertRowid);
+
+    if (acc.business) {
+      const b = acc.business;
+      await client.execute({
+        sql: "INSERT INTO businesses (user_id, name, segment, tone, info) VALUES (?, ?, ?, ?, ?)",
+        args: [userId, b.name, b.segment, b.tone, b.info],
+      });
+    }
+    if (acc.role === "admin") {
+      await client.batch(
+        DEMO_REPLIES.map((r) => ({
+          sql: `INSERT INTO replies
+                  (user_id, channel, customer_message, intent, sentiment, urgency, summary, reply, missing_info)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            userId,
+            r.channel,
+            r.customer_message,
+            r.intent,
+            r.sentiment,
+            r.urgency,
+            r.summary,
+            r.reply,
+            JSON.stringify(r.missing_info),
+          ],
+        })),
+        "write",
+      );
+    }
+  }
+}
+
+// ---------- Helpers ----------
+
+/** Converte as linhas do libSQL em objetos simples. */
+function rows<T>(result: ResultSet): T[] {
+  return result.rows.map(
+    (row) => Object.fromEntries(result.columns.map((col) => [col, row[col]])) as T,
+  );
+}
+
+async function all<T>(stmt: InStatement) {
+  return rows<T>(await (await getDb()).execute(stmt));
+}
+
+async function first<T>(stmt: InStatement) {
+  return (await all<T>(stmt))[0] as T | undefined;
+}
+
+async function run(stmt: InStatement) {
+  return (await getDb()).execute(stmt);
 }
 
 // ---------- Usuários ----------
 
 export function findUserByEmail(email: string) {
-  return getDb().prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
+  return first<User>({ sql: "SELECT * FROM users WHERE email = ?", args: [email] });
 }
 
 export function findUserById(id: number) {
-  return getDb().prepare("SELECT * FROM users WHERE id = ?").get(id) as User | undefined;
+  return first<User>({ sql: "SELECT * FROM users WHERE id = ?", args: [id] });
 }
 
-export function createUser(name: string, email: string, passwordHash: string, role?: Role) {
+export async function countUsers() {
+  return (await first<{ n: number }>("SELECT COUNT(*) AS n FROM users"))!.n;
+}
+
+export async function countAdmins() {
+  return (await first<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'"))!.n;
+}
+
+export async function createUser(name: string, email: string, passwordHash: string, role?: Role) {
   // O primeiro usuário cadastrado vira administrador.
-  const finalRole = role ?? (countUsers() === 0 ? "admin" : "user");
-  const result = getDb()
-    .prepare("INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)")
-    .run(name, email, passwordHash, finalRole);
+  const finalRole = role ?? ((await countUsers()) === 0 ? "admin" : "user");
+  const result = await run({
+    sql: "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)",
+    args: [name, email, passwordHash, finalRole],
+  });
   return Number(result.lastInsertRowid);
 }
 
-export function countUsers() {
-  return (getDb().prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
-}
-
-export function countAdmins() {
-  return (getDb().prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get() as { n: number }).n;
-}
-
 export function listUsersWithStats() {
-  return getDb()
-    .prepare(
-      `SELECT u.id, u.name, u.email, u.role, u.created_at,
-              b.name AS business_name,
-              (SELECT COUNT(*) FROM replies r WHERE r.user_id = u.id) AS replies_count
-       FROM users u
-       LEFT JOIN businesses b ON b.user_id = u.id
-       ORDER BY u.id`,
-    )
-    .all() as UserWithStats[];
+  return all<UserWithStats>(`
+    SELECT u.id, u.name, u.email, u.role, u.created_at,
+           b.name AS business_name,
+           (SELECT COUNT(*) FROM replies r WHERE r.user_id = u.id) AS replies_count
+    FROM users u
+    LEFT JOIN businesses b ON b.user_id = u.id
+    ORDER BY u.id
+  `);
 }
 
-export function updateUser(id: number, name: string, email: string) {
-  getDb().prepare("UPDATE users SET name = ?, email = ? WHERE id = ?").run(name, email, id);
+export async function updateUser(id: number, name: string, email: string) {
+  await run({ sql: "UPDATE users SET name = ?, email = ? WHERE id = ?", args: [name, email, id] });
 }
 
-export function updateUserRole(id: number, role: Role) {
-  getDb().prepare("UPDATE users SET role = ? WHERE id = ?").run(role, id);
+export async function updateUserRole(id: number, role: Role) {
+  await run({ sql: "UPDATE users SET role = ? WHERE id = ?", args: [role, id] });
 }
 
-export function updateUserPassword(id: number, passwordHash: string) {
-  getDb().prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, id);
+export async function updateUserPassword(id: number, passwordHash: string) {
+  await run({ sql: "UPDATE users SET password_hash = ? WHERE id = ?", args: [passwordHash, id] });
 }
 
-export function deleteUser(id: number) {
-  getDb().prepare("DELETE FROM users WHERE id = ?").run(id);
+export async function deleteUser(id: number) {
+  // Apaga os dados relacionados explicitamente (não depende de PRAGMA foreign_keys,
+  // que não fica ativo entre requisições no banco remoto).
+  await (await getDb()).batch(
+    [
+      { sql: "DELETE FROM replies WHERE user_id = ?", args: [id] },
+      { sql: "DELETE FROM businesses WHERE user_id = ?", args: [id] },
+      { sql: "DELETE FROM users WHERE id = ?", args: [id] },
+    ],
+    "write",
+  );
 }
 
 // ---------- Negócio ----------
 
 export function getBusiness(userId: number) {
-  return getDb().prepare("SELECT * FROM businesses WHERE user_id = ?").get(userId) as
-    | Business
-    | undefined;
+  return first<Business>({ sql: "SELECT * FROM businesses WHERE user_id = ?", args: [userId] });
 }
 
-export function saveBusiness(b: Omit<Business, "updated_at">) {
-  getDb()
-    .prepare(
-      `INSERT INTO businesses (user_id, name, segment, tone, info)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET
-         name = excluded.name, segment = excluded.segment, tone = excluded.tone,
-         info = excluded.info, updated_at = datetime('now')`,
-    )
-    .run(b.user_id, b.name, b.segment, b.tone, b.info);
+export async function saveBusiness(b: Omit<Business, "updated_at">) {
+  await run({
+    sql: `INSERT INTO businesses (user_id, name, segment, tone, info)
+          VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(user_id) DO UPDATE SET
+            name = excluded.name, segment = excluded.segment, tone = excluded.tone,
+            info = excluded.info, updated_at = datetime('now')`,
+    args: [b.user_id, b.name, b.segment, b.tone, b.info],
+  });
 }
 
 // ---------- Respostas ----------
 
-export function createReply(r: Omit<Reply, "id" | "created_at">) {
-  getDb()
-    .prepare(
-      `INSERT INTO replies
-         (user_id, channel, customer_message, intent, sentiment, urgency, summary, reply, missing_info)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+export async function createReply(r: Omit<Reply, "id" | "created_at">) {
+  await run({
+    sql: `INSERT INTO replies
+            (user_id, channel, customer_message, intent, sentiment, urgency, summary, reply, missing_info)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
       r.user_id,
       r.channel,
       r.customer_message,
@@ -211,15 +299,17 @@ export function createReply(r: Omit<Reply, "id" | "created_at">) {
       r.summary,
       r.reply,
       r.missing_info,
-    );
+    ],
+  });
 }
 
 export function listReplies(userId: number) {
-  return getDb()
-    .prepare("SELECT * FROM replies WHERE user_id = ? ORDER BY id DESC LIMIT 50")
-    .all(userId) as Reply[];
+  return all<Reply>({
+    sql: "SELECT * FROM replies WHERE user_id = ? ORDER BY id DESC LIMIT 50",
+    args: [userId],
+  });
 }
 
-export function deleteReply(id: number, userId: number) {
-  getDb().prepare("DELETE FROM replies WHERE id = ? AND user_id = ?").run(id, userId);
+export async function deleteReply(id: number, userId: number) {
+  await run({ sql: "DELETE FROM replies WHERE id = ? AND user_id = ?", args: [id, userId] });
 }

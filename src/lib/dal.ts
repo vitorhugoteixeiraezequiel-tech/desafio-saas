@@ -11,8 +11,10 @@ import { getSession } from "./session";
  */
 export const requireUser = cache(async () => {
   const session = await getSession();
-  const user = session ? findUserById(session.userId) : undefined;
-  if (!user) redirect("/login");
+  if (!session) redirect("/login");
+  const user = await findUserById(session.userId);
+  // Sessão válida de um usuário que não existe mais: limpa o cookie.
+  if (!user) redirect("/sair");
   return user;
 });
 

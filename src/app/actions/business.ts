@@ -10,7 +10,7 @@ export async function updateBusiness(_: FormState, formData: FormData): Promise<
   const parsed = businessSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
-  saveBusiness({ user_id: user.id, ...parsed.data });
+  await saveBusiness({ user_id: user.id, ...parsed.data });
   revalidatePath("/", "layout");
   return { success: "Informações do negócio salvas. A IA já vai usar os novos dados." };
 }

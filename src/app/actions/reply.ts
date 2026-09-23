@@ -14,7 +14,7 @@ export type ReplyState = {
 
 export async function answerCustomer(_: ReplyState, formData: FormData): Promise<ReplyState> {
   const user = await requireUser();
-  const business = getBusiness(user.id);
+  const business = await getBusiness(user.id);
   if (!business) return { error: "Cadastre as informações do seu negócio antes de responder clientes." };
 
   const parsed = replySchema.safeParse(Object.fromEntries(formData));
@@ -28,7 +28,7 @@ export async function answerCustomer(_: ReplyState, formData: FormData): Promise
     return { error: friendlyError(err) };
   }
 
-  createReply({
+  await createReply({
     user_id: user.id,
     channel: parsed.data.channel,
     customer_message: parsed.data.message,
@@ -45,7 +45,7 @@ export async function answerCustomer(_: ReplyState, formData: FormData): Promise
 
 export async function removeReply(id: number) {
   const user = await requireUser();
-  deleteReply(id, user.id);
+  await deleteReply(id, user.id);
   revalidatePath("/dashboard");
 }
 

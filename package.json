@@ -8,10 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "node --conditions=react-server --env-file=.env scripts/seed.mts",
-    "testar-ia":"node --conditions=react-server --env-file=.env scripts/testar-ia.mts"
+    "testar-ia": "node --conditions=react-server --env-file=.env scripts/testar-ia.mts"
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
+    "@libsql/client": "^0.18.0",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.12",
     "next": "16.3.6",

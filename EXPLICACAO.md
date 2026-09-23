@@ -22,7 +22,8 @@ A empresa cadastra as informações do negócio (horários, preços, entrega). D
 - TypeScript
 - Tailwind CSS
 - Google Gemini (IA)
-- SQLite (banco de dados)
+- SQLite / Turso (banco de dados)
+- Vercel (hospedagem)
 
 ## Como rodar
 

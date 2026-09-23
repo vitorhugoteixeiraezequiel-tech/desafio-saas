@@ -10,7 +10,7 @@ export const metadata = { title: "Editar usuário — Respondi" };
 export default async function EditUserPage(props: PageProps<"/admin/usuarios/[id]">) {
   const admin = await requireAdmin();
   const { id } = await props.params;
-  const user = findUserById(Number(id));
+  const user = await findUserById(Number(id));
   if (!user) notFound();
 
   const isSelf = user.id === admin.id;

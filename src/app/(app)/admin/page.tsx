@@ -8,7 +8,7 @@ export const metadata = { title: "Administração — Respondi" };
 
 export default async function AdminPage() {
   const admin = await requireAdmin();
-  const users = listUsersWithStats();
+  const users = await listUsersWithStats();
 
   return (
     <div className="space-y-8">

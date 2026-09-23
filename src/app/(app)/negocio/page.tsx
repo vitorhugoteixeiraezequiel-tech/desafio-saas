@@ -6,7 +6,7 @@ export const metadata = { title: "Meu negócio — Respondi" };
 
 export default async function BusinessPage() {
   const user = await requireUser();
-  const business = getBusiness(user.id);
+  const business = await getBusiness(user.id);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

@@ -27,11 +27,11 @@ export async function adminCreateUser(_: FormState, formData: FormData): Promise
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
   const { name, email, password, role } = parsed.data;
-  if (findUserByEmail(email)) {
+  if (await findUserByEmail(email)) {
     return { fieldErrors: { email: ["Este e-mail já está cadastrado"] } };
   }
 
-  createUser(name, email, await bcrypt.hash(password, 10), role);
+  await createUser(name, email, await bcrypt.hash(password, 10), role);
   revalidatePath("/admin");
   return { success: `Usuário ${name} criado com sucesso` };
 }
@@ -42,29 +42,29 @@ export async function adminUpdateUser(
   formData: FormData,
 ): Promise<FormState> {
   const admin = await requireAdmin();
-  const target = findUserById(id);
+  const target = await findUserById(id);
   if (!target) return { error: "Usuário não encontrado" };
 
   const parsed = adminUpdateUserSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
   const { name, email, role, password } = parsed.data;
-  const existing = findUserByEmail(email);
+  const existing = await findUserByEmail(email);
   if (existing && existing.id !== id) {
     return { fieldErrors: { email: ["Este e-mail já está em uso"] } };
   }
 
   // Impede que o sistema fique sem nenhum administrador.
-  if (target.role === "admin" && role === "user" && countAdmins() <= 1) {
+  if (target.role === "admin" && role === "user" && (await countAdmins()) <= 1) {
     return { fieldErrors: { role: ["Este é o único administrador. Promova outro usuário antes."] } };
   }
   if (target.id === admin.id && role === "user") {
     return { fieldErrors: { role: ["Você não pode remover o seu próprio acesso de administrador."] } };
   }
 
-  updateUser(id, name, email);
-  updateUserRole(id, role);
-  if (password) updateUserPassword(id, await bcrypt.hash(password, 10));
+  await updateUser(id, name, email);
+  await updateUserRole(id, role);
+  if (password) await updateUserPassword(id, await bcrypt.hash(password, 10));
 
   revalidatePath("/", "layout");
   return { success: "Usuário atualizado com sucesso" };
@@ -75,7 +75,7 @@ export async function adminDeleteUser(id: number) {
   // Para excluir a própria conta existe a página de perfil (que pede a senha).
   if (id === admin.id) return;
 
-  deleteUser(id); // negócio e histórico são apagados junto (ON DELETE CASCADE)
+  await deleteUser(id); // negócio e histórico são apagados junto
   revalidatePath("/admin");
   redirect("/admin");
 }

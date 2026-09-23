@@ -19,12 +19,12 @@ export async function updateProfile(_: FormState, formData: FormData): Promise<F
   if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
 
   const { name, email } = parsed.data;
-  const existing = findUserByEmail(email);
+  const existing = await findUserByEmail(email);
   if (existing && existing.id !== user.id) {
     return { fieldErrors: { email: ["Este e-mail já está em uso"] } };
   }
 
-  updateUser(user.id, name, email);
+  await updateUser(user.id, name, email);
   revalidatePath("/", "layout");
   return { success: "Dados atualizados com sucesso" };
 }
@@ -37,7 +37,7 @@ export async function changePassword(_: FormState, formData: FormData): Promise<
   const ok = await bcrypt.compare(parsed.data.currentPassword, user.password_hash);
   if (!ok) return { fieldErrors: { currentPassword: ["Senha atual incorreta"] } };
 
-  updateUserPassword(user.id, await bcrypt.hash(parsed.data.newPassword, 10));
+  await updateUserPassword(user.id, await bcrypt.hash(parsed.data.newPassword, 10));
   return { success: "Senha alterada com sucesso" };
 }
 
@@ -48,7 +48,7 @@ export async function deleteAccount(_: FormState, formData: FormData): Promise<F
   const ok = await bcrypt.compare(password, user.password_hash);
   if (!ok) return { error: "Senha incorreta" };
 
-  deleteUser(user.id); // o histórico é apagado junto (ON DELETE CASCADE)
+  await deleteUser(user.id); // o negócio e o histórico são apagados junto
   await deleteSession();
   redirect("/");
 }
