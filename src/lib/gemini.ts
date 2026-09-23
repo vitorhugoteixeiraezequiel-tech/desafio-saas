@@ -1,9 +1,17 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest";
-// Usado quando o modelo principal está sobrecarregado (erro 503), comum no plano gratuito.
-const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL || "gemini-flash-lite-latest";
+// Modelos tentados em ordem. No plano gratuito é comum um modelo ficar
+// sobrecarregado (503/504), então passamos para o próximo da lista.
+const MODELS = (
+  process.env.GEMINI_MODELS || "gemini-3-flash-preview,gemini-flash-latest,gemini-flash-lite-latest"
+)
+  .split(",")
+  .map((m) => m.trim())
+  .filter(Boolean);
+
+// Tempo máximo de espera por modelo antes de tentar o próximo.
+const TIMEOUT_PER_MODEL_MS = 12_000;
 
 export const TONES = {
   profissional: "profissional e confiável",
@@ -43,27 +51,30 @@ export async function generateProductDescription(input: {
 Características e informações: ${input.details}
 Tom de voz desejado: ${TONES[input.tone]}`;
 
-  const request = (model: string) =>
-    getClient().models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
-        temperature: 0.8,
-      },
-    });
-
-  let response;
-  try {
-    response = await request(MODEL);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!/503|UNAVAILABLE|overloaded|high demand/i.test(msg)) throw err;
-    console.warn(`Modelo ${MODEL} indisponível, usando ${FALLBACK_MODEL}`);
-    response = await request(FALLBACK_MODEL);
+  let lastError: unknown;
+  for (const model of MODELS) {
+    try {
+      const response = await getClient().models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          temperature: 0.8,
+          // Sem isso o SDK repete a chamada várias vezes com espera crescente
+          // e o usuário pode aguardar mais de um minuto.
+          httpOptions: { timeout: TIMEOUT_PER_MODEL_MS, retryOptions: { attempts: 1 } },
+        },
+      });
+      const text = response.text?.trim();
+      if (text) return text;
+      lastError = new Error("A IA não retornou nenhum texto.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Erro de chave não adianta tentar outro modelo.
+      if (/API key|401|403/i.test(msg)) throw err;
+      console.warn(`Modelo ${model} falhou: ${msg.slice(0, 100)}`);
+      lastError = err;
+    }
   }
-
-  const text = response.text?.trim();
-  if (!text) throw new Error("A IA não retornou nenhum texto.");
-  return text;
+  throw lastError;
 }

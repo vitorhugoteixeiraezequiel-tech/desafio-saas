@@ -17,6 +17,7 @@ O usuário cria uma conta, informa o nome e as características do produto, esco
 - Requisição ao Google Gemini feita **no servidor**, com a chave nunca exposta ao navegador
 - Prompt de sistema que instrui o modelo a não inventar especificações e a seguir uma estrutura fixa
 - Histórico das descrições geradas, com opção de copiar e excluir
+- **Fallback entre modelos**: se um modelo do Gemini estiver sobrecarregado (comum no plano gratuito), o sistema tenta o próximo da lista automaticamente, com tempo máximo de 12s por modelo
 - Mensagens de erro amigáveis (chave inválida, limite gratuito atingido etc.)
 
 ## Tecnologias

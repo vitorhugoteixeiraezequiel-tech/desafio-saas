@@ -47,7 +47,7 @@ function friendlyError(err: unknown) {
   if (msg.includes("GEMINI_API_KEY")) return "Chave da API do Gemini não configurada no servidor.";
   if (msg.includes("429") || /quota|rate/i.test(msg))
     return "Limite gratuito da API atingido. Aguarde um minuto e tente novamente.";
-  if (/503|UNAVAILABLE|high demand/i.test(msg))
+  if (/503|504|UNAVAILABLE|high demand|Deadline|abort/i.test(msg))
     return "A IA está sobrecarregada no momento. Tente novamente em alguns segundos.";
   if (msg.includes("API key") || msg.includes("401") || msg.includes("403"))
     return "Chave da API do Gemini inválida.";
