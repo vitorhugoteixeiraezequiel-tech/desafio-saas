@@ -27,16 +27,24 @@ export const passwordSchema = z.object({
   newPassword: password,
 });
 
-export const generateSchema = z.object({
-  productName: z.string().trim().min(2, "Informe o nome do produto").max(120),
-  details: z
+export const businessSchema = z.object({
+  name: z.string().trim().min(2, "Informe o nome da empresa").max(100),
+  segment: z.string().trim().min(2, "Informe o ramo de atuação").max(100),
+  tone: z.enum(["formal", "amigavel", "descontraido"], { error: "Escolha um tom de voz" }),
+  info: z
     .string()
     .trim()
-    .min(10, "Descreva o produto com pelo menos 10 caracteres")
-    .max(1500, "Máximo de 1500 caracteres"),
-  tone: z.enum(["profissional", "descontraido", "luxo", "tecnico", "persuasivo"], {
-    error: "Escolha um tom de voz",
-  }),
+    .min(30, "Descreva o negócio com pelo menos 30 caracteres")
+    .max(6000, "Máximo de 6000 caracteres"),
+});
+
+export const replySchema = z.object({
+  message: z
+    .string()
+    .trim()
+    .min(3, "Cole a mensagem do cliente")
+    .max(3000, "Máximo de 3000 caracteres"),
+  channel: z.enum(["whatsapp", "email", "instagram"], { error: "Escolha o canal" }),
 });
 
 export function fieldErrors(error: z.ZodError) {

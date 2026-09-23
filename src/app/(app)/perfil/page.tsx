@@ -1,7 +1,7 @@
 import { DeleteAccountForm, PasswordForm, ProfileForm } from "@/components/profile-forms";
 import { getCurrentUser } from "@/lib/dal";
 
-export const metadata = { title: "Meu perfil — Descritiva" };
+export const metadata = { title: "Meu perfil — Respondi" };
 
 export default async function ProfilePage() {
   const user = await getCurrentUser();

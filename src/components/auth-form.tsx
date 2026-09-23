@@ -14,7 +14,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     <Card className="w-full max-w-sm">
       <h1 className="text-xl font-semibold">{isSignup ? "Criar conta" : "Entrar"}</h1>
       <p className="mt-1 text-sm text-slate-600">
-        {isSignup ? "Comece a gerar descrições em segundos." : "Bem-vindo de volta!"}
+        {isSignup ? "Comece a responder clientes em segundos." : "Bem-vindo de volta!"}
       </p>
 
       <form action={action} className="mt-6 space-y-4">

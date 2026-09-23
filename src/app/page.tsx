@@ -21,11 +21,11 @@ export default function Home() {
           Powered by Google Gemini
         </span>
         <h1 className="max-w-2xl text-4xl font-bold tracking-tight sm:text-5xl">
-          Descrições de produto que vendem, em segundos.
+          Responda seus clientes em segundos, sem inventar nada.
         </h1>
         <p className="mt-4 max-w-xl text-lg text-slate-600">
-          Informe o nome e as características do produto, escolha o tom de voz e a IA
-          escreve um texto pronto para sua loja virtual ou marketplace.
+          Cadastre as informações do seu negócio uma vez. Depois é só colar a mensagem do cliente:
+          a IA entende o que ele quer e escreve a resposta pronta para WhatsApp, e-mail ou Instagram.
         </p>
         <Link
           href="/cadastro"
@@ -36,9 +36,9 @@ export default function Home() {
 
         <div className="mt-16 grid w-full gap-4 text-left sm:grid-cols-3">
           {[
-            ["1. Descreva", "Nome do produto e suas características principais."],
-            ["2. Escolha o tom", "Profissional, descontraído, luxo, técnico ou persuasivo."],
-            ["3. Copie e publique", "Texto estruturado com título, benefícios e chamada para ação."],
+            ["1. Ensine seu negócio", "Horários, preços, entrega, pagamento e políticas. A IA só usa o que você informar."],
+            ["2. Cole a mensagem", "A IA identifica se é dúvida, pedido, reclamação ou elogio, e o nível de urgência."],
+            ["3. Copie a resposta", "Texto no tom da sua marca, adaptado ao canal, e um aviso do que falta no seu cadastro."],
           ].map(([title, text]) => (
             <div key={title} className="rounded-2xl border border-slate-200 bg-white p-5">
               <h3 className="font-semibold">{title}</h3>

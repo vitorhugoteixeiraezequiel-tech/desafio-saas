@@ -3,7 +3,7 @@ import type { ComponentProps, ReactNode } from "react";
 export function Logo() {
   return (
     <span className="text-lg font-bold tracking-tight">
-      Descri<span className="text-indigo-600">tiva</span>
+      Respon<span className="text-indigo-600">di</span>
     </span>
   );
 }
@@ -83,6 +83,10 @@ export function Button({
       {...props}
     />
   );
+}
+
+export function Badge({ children, className = "bg-slate-100 text-slate-700" }: { children: ReactNode; className?: string }) {
+  return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${className}`}>{children}</span>;
 }
 
 export function Alert({ type, children }: { type: "error" | "success"; children: ReactNode }) {

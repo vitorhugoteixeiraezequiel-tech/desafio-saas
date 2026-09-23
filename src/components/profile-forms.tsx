@@ -76,7 +76,7 @@ export function DeleteAccountForm() {
     <Card className="border-red-200">
       <h2 className="font-semibold text-red-700">Excluir conta</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Sua conta e todo o histórico de descrições serão apagados permanentemente.
+        Sua conta e todo o histórico de atendimentos e os dados do negócio serão apagados permanentemente.
       </p>
       {open ? (
         <form action={action} className="mt-4 space-y-4">

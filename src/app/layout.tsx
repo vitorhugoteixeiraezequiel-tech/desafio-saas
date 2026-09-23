@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Descritiva — descrições de produto com IA",
-  description: "Gere descrições de produto prontas para vender, usando o Google Gemini.",
+  title: "Respondi — atendimento ao cliente com IA",
+  description: "Respostas prontas para seus clientes no WhatsApp, e-mail e Instagram, usando o Google Gemini.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
